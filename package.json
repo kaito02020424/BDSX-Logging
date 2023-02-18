@@ -1,0 +1,15 @@
+{
+  "name": "bdsx-logging",
+  "version": "1.0.0",
+  "description": "BDSX logging plugin",
+  "main": "index.js",
+  "bdsxPlugin": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "kaito02020424 <kaito02020424@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "bdsx": "file:../bdsx"
+  }
+}
