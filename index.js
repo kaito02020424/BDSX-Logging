@@ -101,6 +101,26 @@ async function rLookup(data, x, y, z, r) {
     }
     return m;
 }
+async function timeLookup(data,time,di){
+    const days = Math.floor(time/86400);
+    const hours = Math.floor((time%86400)/3600);
+    const minutes = Math.floor((time%3600)/60);
+    const seconds = Math.floor((time%60));
+    let m = `----§bBDSX-Logging§r----\n(§bTime:${days}days§r,§b${hours}hours§r,§b${minutes}minutes§r,§b${seconds}seconds§r):`;
+    let h = "";
+    for (const d of data){
+        if (d.unix < time){
+            break;
+        }
+        if (d.d !== di) continue;
+        if (h !== `§8${d.time}§r`) {
+            m += `\n§8${d.time}§r`
+            h = `§8${d.time}§r`
+        }
+        m += `\n[${d.mode == "Place" ? "§a+§r" : "§c-§r"}][§b${d.name}§r] ${d.mode == "Place" ? `${d.block} ` : ""}(§b${d.x}§r,§b${d.y}§r,§b${d.z}§r)`
+    }
+    return m;
+}
 event_1.events.blockPlace.on(ev => {
     ev.blockSource.getDimensionId()
     const date = new Date()
@@ -157,7 +177,7 @@ event_1.events.chestOpen.on(ev => {
     const y = String(ev.blockPos.y)
     const z = String(ev.blockPos.z)
     addData(ev.player.getNameTag(), ev.player.getXuid(), "Move:OpenChest", "Place", x, y, z, dimension[ev.player.getDimensionId()])
-})
+});
 //コマンド
 launcher_1.bedrockServer.afterOpen().then(() => {
     const bl = command_2.command.register("bl", "BDSX-Logging commands", command_1.CommandPermissionLevel.Operator)
@@ -256,5 +276,22 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("r", { r: 0 }),
         radius: nativetype_1.int32_t,
+    });
+
+    bl.overload((param, origin, output) => {
+        const player = origin.getEntity();
+        if (!(player.isPlayer())) return;
+        const date = new Date();
+        const min_time=Math.floor(date.getTime() / 1000)-(param.days*86400+param.hours*3600+param.minutes*60+param.seconds);
+        timeLookup(database.normal,min_time,dimension[player.getDimensionId()]).then(value => {
+            player.sendMessage(value);
+        })
+    }, {
+        mode: command_2.command.enum("lookup", { lookup: 0 }),
+        lookupmode: command_2.command.enum("time", { time: 0 }),
+        days: nativetype_1.int32_t,
+        hours: nativetype_1.int32_t,
+        minutes: nativetype_1.int32_t,
+        seconds: nativetype_1.int32_t
     });
 });
