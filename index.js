@@ -10,7 +10,7 @@ const fs = require("fs");
 let database = JSON.parse(fs.readFileSync(`${cd}/DB/logging.json`));
 let inspect = {};
 const dimension = ["OverWorld", "Nether", "The End"];
-function addData(name, xuid, block, mode, x, y, z, dimension) {
+async function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
     if (!(x in database.xyz[dimension])) {
         database.xyz[dimension][x] = {}
@@ -24,14 +24,21 @@ function addData(name, xuid, block, mode, x, y, z, dimension) {
     if (block === null) {
         database.xyz[dimension][x][y][z].unshift({ name: name, xuid: xuid, mode: mode, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
         database.normal.unshift({ name: name, xuid: xuid, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
-        fs.writeFileSync(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4));
-        return;
+        fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4), err => {
+            if (err) {
+                console.log(err);
+            }
+        });
     }
     database.xyz[dimension][x][y][z].unshift({ name: name, xuid: xuid, block: block, mode: mode, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
     database.normal.unshift({ name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
-    fs.writeFileSync(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4));
+    fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4), err => {
+        if (err) {
+            console.log(err);
+        }
+    });
 }
-function createMessage(data, x, y, z, xuid, max) {
+function createMessage(data, x, y, z, max) {
     let m = `----§bBDSX-Logging§r----\n(§b${x}§r,§b${y}§r,§b${z}§r):`;
     let h = "";
     let c = 0;
@@ -101,15 +108,15 @@ async function rLookup(data, x, y, z, r) {
     }
     return m;
 }
-async function timeLookup(data,time,di){
-    const days = Math.floor(time/86400);
-    const hours = Math.floor((time%86400)/3600);
-    const minutes = Math.floor((time%3600)/60);
-    const seconds = Math.floor((time%60));
+async function timeLookup(data, time, di) {
+    const days = Math.floor(time / 86400);
+    const hours = Math.floor((time % 86400) / 3600);
+    const minutes = Math.floor((time % 3600) / 60);
+    const seconds = Math.floor((time % 60));
     let m = `----§bBDSX-Logging§r----\n(§bTime:${days}days§r,§b${hours}hours§r,§b${minutes}minutes§r,§b${seconds}seconds§r):`;
     let h = "";
-    for (const d of data){
-        if (d.unix < time){
+    for (const d of data) {
+        if (d.unix < time) {
             break;
         }
         if (d.d !== di) continue;
@@ -122,8 +129,6 @@ async function timeLookup(data,time,di){
     return m;
 }
 event_1.events.blockPlace.on(ev => {
-    ev.blockSource.getDimensionId()
-    const date = new Date()
     const x = String(ev.blockPos.x);
     const y = String(ev.blockPos.y);
     const z = String(ev.blockPos.z);
@@ -140,7 +145,7 @@ event_1.events.blockPlace.on(ev => {
             ev.player.sendMessage("No data.")
             return common_1.CANCEL;
         }
-        let m = createMessage(data, x, y, z, xuid, inspect[ev.player.getXuid()]);
+        let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
         ev.player.sendMessage(m);
         return common_1.CANCEL
     }
@@ -148,28 +153,31 @@ event_1.events.blockPlace.on(ev => {
 });
 
 event_1.events.blockDestroy.on(ev => {
-    const date = new Date()
     const x = String(ev.blockPos.x);
     const y = String(ev.blockPos.y);
     const z = String(ev.blockPos.z);
-    const xuid = ev.player.getXuid();
     if (ev.player.getXuid() in inspect) {
         let data
         try {
             data = database.xyz[dimension[ev.blockSource.getDimensionId()]][x][y][z];
         } catch (e) {
             ev.player.sendMessage("No data.")
+            console.timeEnd("destroy");
             return common_1.CANCEL;
         }
         if (data === null || data === undefined) {
             ev.player.sendMessage("No data.")
+            console.timeEnd("destroy");
             return common_1.CANCEL;
         }
         let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
         ev.player.sendMessage(m);
         return common_1.CANCEL
     }
+    console.time("destroy");
     addData(ev.player.getNameTag(), ev.player.getXuid(), null, "Break", x, y, z, dimension[ev.blockSource.getDimensionId()])
+    console.timeEnd("destroy");
+
 
 });
 event_1.events.chestOpen.on(ev => {
@@ -282,8 +290,8 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const player = origin.getEntity();
         if (!(player.isPlayer())) return;
         const date = new Date();
-        const min_time=Math.floor(date.getTime() / 1000)-(param.days*86400+param.hours*3600+param.minutes*60+param.seconds);
-        timeLookup(database.normal,min_time,dimension[player.getDimensionId()]).then(value => {
+        const min_time = Math.floor(date.getTime() / 1000) - (param.days * 86400 + param.hours * 3600 + param.minutes * 60 + param.seconds);
+        timeLookup(database.normal, min_time, dimension[player.getDimensionId()]).then(value => {
             player.sendMessage(value);
         })
     }, {
