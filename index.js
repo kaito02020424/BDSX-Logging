@@ -10,7 +10,7 @@ const fs = require("fs");
 let database = JSON.parse(fs.readFileSync(`${cd}/DB/logging.json`));
 let inspect = {};
 const dimension = ["OverWorld", "Nether", "The End"];
-async function addData(name, xuid, block, mode, x, y, z, dimension) {
+function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
     if (!(x in database.xyz[dimension])) {
         database.xyz[dimension][x] = {}
