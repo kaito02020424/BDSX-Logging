@@ -10,6 +10,13 @@ const fs = require("fs");
 let database = JSON.parse(fs.readFileSync(`${cd}/DB/logging.json`));
 let inspect = {};
 const dimension = ["OverWorld", "Nether", "The End"];
+setInterval(() => {
+    fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4), err => {
+        if (err) {
+            console.log(err);
+        }
+    });
+}, 1000);
 function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
     if (!(x in database.xyz[dimension])) {
@@ -24,19 +31,10 @@ function addData(name, xuid, block, mode, x, y, z, dimension) {
     if (block === null) {
         database.xyz[dimension][x][y][z].unshift({ name: name, xuid: xuid, mode: mode, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
         database.normal.unshift({ name: name, xuid: xuid, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
-        fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4), err => {
-            if (err) {
-                console.log(err);
-            }
-        });
+        return;
     }
     database.xyz[dimension][x][y][z].unshift({ name: name, xuid: xuid, block: block, mode: mode, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
     database.normal.unshift({ name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
-    fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4), err => {
-        if (err) {
-            console.log(err);
-        }
-    });
 }
 function createMessage(data, x, y, z, max) {
     let m = `----§bBDSX-Logging§r----\n(§b${x}§r,§b${y}§r,§b${z}§r):`;
