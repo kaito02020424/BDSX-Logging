@@ -162,23 +162,17 @@ event_1.events.blockDestroy.on(ev => {
             data = database.xyz[dimension[ev.blockSource.getDimensionId()]][x][y][z];
         } catch (e) {
             ev.player.sendMessage("No data.")
-            console.timeEnd("destroy");
             return common_1.CANCEL;
         }
         if (data === null || data === undefined) {
             ev.player.sendMessage("No data.")
-            console.timeEnd("destroy");
             return common_1.CANCEL;
         }
         let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
         ev.player.sendMessage(m);
         return common_1.CANCEL
     }
-    console.time("destroy");
     addData(ev.player.getNameTag(), ev.player.getXuid(), null, "Break", x, y, z, dimension[ev.blockSource.getDimensionId()])
-    console.timeEnd("destroy");
-
-
 });
 event_1.events.chestOpen.on(ev => {
     const x = String(ev.blockPos.x)
