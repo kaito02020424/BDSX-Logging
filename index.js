@@ -1,3 +1,4 @@
+const sqlite = require("sqlite-sync");
 const event_1 = require("bdsx/event");
 const common_1 = require("bdsx/common");
 const nativetype_1 = require("bdsx/nativetype");
@@ -6,39 +7,22 @@ const command_1 = require("bdsx/bds/command");
 const command_2 = require("bdsx/command");
 const path = require("path");
 const cd = path.resolve(__dirname, "./");
-const fs = require("fs");
-let database = JSON.parse(fs.readFileSync(`${cd}/DB/logging.json`));
-let inspect = {};
-const dimension = ["OverWorld", "Nether", "The End"];
-let status = false
-const interval = setInterval(() => {
-    if (!status) return;
-    fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database), err => {
-        if (err) {
-            console.log(err);
-        }
-        status = false;
-    });
-}, 1000);
-function addData(name, xuid, block, mode, x, y, z, dimension) {
-    status = true;
-    const date = new Date()
-    if (!(x in database.xyz[dimension])) {
-        database.xyz[dimension][x] = {}
-    }
-    if (!(y in database.xyz[dimension][x])) {
-        database.xyz[dimension][x][y] = {}
-    }
-    if (!(z in database.xyz[dimension][x][y])) {
-        database.xyz[dimension][x][y][z] = []
-    }
-    if (block === null) {
-        database.xyz[dimension][x][y][z].unshift({ name: name, xuid: xuid, mode: mode, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
-        database.normal.unshift({ name: name, xuid: xuid, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
+sqlite.connect(`${cd}/DB/logging.db`);
+sqlite.run("CREATE TABLE IF NOT EXISTS blocks(name,xuid,mode,block,x,y,z,d,time,unix);", (res) => {
+    if (res.error) {
+        console.log("[BDSX-Logging]Create table error");
         return;
     }
-    database.xyz[dimension][x][y][z].unshift({ name: name, xuid: xuid, block: block, mode: mode, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
-    database.normal.unshift({ name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) });
+})
+let inspect = {};
+const dimension = ["OverWorld", "Nether", "The End"];
+function addData(name, xuid, block, mode, x, y, z, dimension) {
+    const date = new Date()
+    sqlite.insert("blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }, (res) => {
+        if (res.error) {
+            console.log("[BDSX-Logging]Insert data error");
+        }
+    })
 }
 function createMessage(data, x, y, z, max) {
     let m = `----§bBDSX-Logging§r----\n(§b${x}§r,§b${y}§r,§b${z}§r):`;
@@ -57,13 +41,8 @@ function createMessage(data, x, y, z, max) {
     }
     return m;
 }
-async function nameLookup(data, name) {
-    let l = [];
-    for (const d of data) {
-        if (d.name === name) {
-            l.push(d);
-        }
-    }
+function nameLookup(data, name) {
+    let l = data;
 
     let m = `----§bBDSX-Logging§r----\n(§b${name}§r):`;
     let h = "";
@@ -78,27 +57,7 @@ async function nameLookup(data, name) {
     }
     return m;
 }
-async function rLookup(data, x, y, z, r) {
-    let save = [];
-    for (const j in data) {
-        for (const k in data[j]) {
-            for (const l in data[j][k]) {
-                const d = data[j][k][l];
-                if (Math.sqrt((Number(j) - x) ** 2 + (Number(k) - y) ** 2 + (Number(l) - z) ** 2) <= r) {
-                    for (const dd of d) {
-                        let fix = dd
-                        fix.x = j;
-                        fix.y = k;
-                        fix.z = l;
-                        save.push(fix);
-                    }
-                }
-            }
-        }
-    }
-    const sorted = save.sort((a, b) => {
-        return (a.unix > b.unix) ? -1 : 1;
-    });
+function rLookup(sorted, x, y, z, r) {
     let m = `----§bBDSX-Logging§r----\n(§bRadius:${r}§r):`;
     let h = "";
     for (const d of sorted) {
@@ -110,7 +69,7 @@ async function rLookup(data, x, y, z, r) {
     }
     return m;
 }
-async function timeLookup(data, time, di) {
+function timeLookup(data, time, di) {
     const days = Math.floor(time / 86400);
     const hours = Math.floor((time % 86400) / 3600);
     const minutes = Math.floor((time % 3600) / 60);
@@ -118,10 +77,6 @@ async function timeLookup(data, time, di) {
     let m = `----§bBDSX-Logging§r----\n(§bTime:${days}days§r,§b${hours}hours§r,§b${minutes}minutes§r,§b${seconds}seconds§r):`;
     let h = "";
     for (const d of data) {
-        if (d.unix < time) {
-            break;
-        }
-        if (d.d !== di) continue;
         if (h !== `§8${d.time}§r`) {
             m += `\n§8${d.time}§r`
             h = `§8${d.time}§r`
@@ -136,17 +91,12 @@ event_1.events.blockPlace.on(ev => {
     const z = String(ev.blockPos.z);
     const xuid = ev.player.getXuid();
     if (ev.player.getXuid() in inspect) {
-        let data
-        try {
-            data = database.xyz[dimension[ev.player.getDimensionId()]][x][y][z];
-        } catch (e) {
+        const data = sqlite.run(`SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?`, [x, y, z, dimension[ev.blockSource.getDimensionId()]])
+        if (data.length == 0) {
             ev.player.sendMessage("No data.")
-            return common_1.CANCEL;
+            return common_1.CANCEL
         }
-        if (data === null || data === undefined) {
-            ev.player.sendMessage("No data.")
-            return common_1.CANCEL;
-        }
+        console.log(data);
         let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
         ev.player.sendMessage(m);
         return common_1.CANCEL
@@ -159,16 +109,10 @@ event_1.events.blockDestroy.on(ev => {
     const y = String(ev.blockPos.y);
     const z = String(ev.blockPos.z);
     if (ev.player.getXuid() in inspect) {
-        let data
-        try {
-            data = database.xyz[dimension[ev.blockSource.getDimensionId()]][x][y][z];
-        } catch (e) {
+        const data = sqlite.run(`SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?`, [x, y, z, dimension[ev.blockSource.getDimensionId()]])
+        if (data.length == 0) {
             ev.player.sendMessage("No data.")
-            return common_1.CANCEL;
-        }
-        if (data === null || data === undefined) {
-            ev.player.sendMessage("No data.")
-            return common_1.CANCEL;
+            return common_1.CANCEL
         }
         let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
         ev.player.sendMessage(m);
@@ -256,10 +200,11 @@ launcher_1.bedrockServer.afterOpen().then(() => {
     bl.overload((param, origin, output) => {
         const player = origin.getEntity();
         if (!(player.isPlayer())) return;
-        const data = database.normal
-        nameLookup(data, param.nameTag).then(m => {
-            player.sendMessage(m);
-        })
+        sqlite.run("SELECT * FROM blocks WHERE name = ?", [param.nameTag], (data) => {
+            data.reverse();
+            player.sendMessage(nameLookup(data, param.nameTag))
+        });
+
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("name", { name: 0 }),
@@ -272,10 +217,11 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const x = Math.floor(player.getPosition().x)
         const y = Math.floor(player.getPosition().y)
         const z = Math.floor(player.getPosition().z)
-        const data = database.xyz[dimension[player.getDimensionId()]]
-        rLookup(data, x, y, z, param.radius).then(m => {
-            player.sendMessage(m);
-        })
+        sqlite.run("SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?)) <= ? AND d = ?", [x, x, y, y, z, z, Math.pow(param.radius, 2), dimension[player.getDimensionId()]], (data) => {
+            data.reverse();
+            player.sendMessage(rLookup(data, x, y, z, param.radius));
+        });
+
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("r", { r: 0 }),
@@ -286,9 +232,10 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const player = origin.getEntity();
         if (!(player.isPlayer())) return;
         const date = new Date();
-        const min_time = Math.floor(date.getTime() / 1000) - (param.days * 86400 + param.hours * 3600 + param.minutes * 60 + param.seconds);
-        timeLookup(database.normal, min_time, dimension[player.getDimensionId()]).then(value => {
-            player.sendMessage(value);
+        const sumTime = (param.days * 86400 + param.hours * 3600 + param.minutes * 60 + param.seconds);
+        const min_time = Math.floor(date.getTime() / 1000) - sumTime;
+        sqlite.run("SELECT * FROM blocks WHERE unix > ? AND d = ?", [min_time, dimension[player.getDimensionId()]], (data) => {
+            player.sendMessage(timeLookup(data, sumTime));
         })
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
@@ -302,6 +249,4 @@ launcher_1.bedrockServer.afterOpen().then(() => {
 
 event_1.events.serverClose.on(ev => {
     console.log("[BDSX-Logging] Stop...")
-    clearInterval(interval)
-    fs.writeFileSync(`${cd}/DB/logging.json`, JSON.stringify(database));
 })
