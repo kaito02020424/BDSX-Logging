@@ -10,14 +10,18 @@ const fs = require("fs");
 let database = JSON.parse(fs.readFileSync(`${cd}/DB/logging.json`));
 let inspect = {};
 const dimension = ["OverWorld", "Nether", "The End"];
-setInterval(() => {
-    fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database, null, 4), err => {
+let status = false
+const interval = setInterval(() => {
+    if (!status) return;
+    fs.writeFile(`${cd}/DB/logging.json`, JSON.stringify(database), err => {
         if (err) {
             console.log(err);
         }
+        status = false;
     });
 }, 1000);
 function addData(name, xuid, block, mode, x, y, z, dimension) {
+    status = true;
     const date = new Date()
     if (!(x in database.xyz[dimension])) {
         database.xyz[dimension][x] = {}
@@ -295,3 +299,9 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         seconds: nativetype_1.int32_t
     });
 });
+
+event_1.events.serverClose.on(ev => {
+    console.log("[BDSX-Logging] Stop...")
+    clearInterval(interval)
+    fs.writeFileSync(`${cd}/DB/logging.json`, JSON.stringify(database));
+})
