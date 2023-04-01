@@ -14,16 +14,11 @@ sqlite.run("CREATE TABLE IF NOT EXISTS blocks(name,xuid,mode,block,x,y,z,d,time,
         return;
     }
 })
-sqlite.create_function(pow);
-sqlite.create_function(sqrt)
+
 let inspect = {};
 const dimension = ["OverWorld", "Nether", "The End"];
-function pow(x, y) {
-    return Math.pow(x, y)
-}
-function sqrt(x) {
-    return Math.sqrt(x);
-}
+
+//functions
 function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
     sqlite.insert("blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }, (res) => {
@@ -93,10 +88,12 @@ function timeLookup(data, time, di) {
     }
     return m;
 }
+
+//events
 event_1.events.blockPlace.on(ev => {
-    const x = String(ev.blockPos.x);
-    const y = String(ev.blockPos.y);
-    const z = String(ev.blockPos.z);
+    const x = ev.blockPos.x;
+    const y = ev.blockPos.y;
+    const z = ev.blockPos.z;
     const xuid = ev.player.getXuid();
     if (ev.player.getXuid() in inspect) {
         const data = sqlite.run(`SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?`, [x, y, z, dimension[ev.blockSource.getDimensionId()]])
@@ -112,9 +109,9 @@ event_1.events.blockPlace.on(ev => {
 });
 
 event_1.events.blockDestroy.on(ev => {
-    const x = String(ev.blockPos.x);
-    const y = String(ev.blockPos.y);
-    const z = String(ev.blockPos.z);
+    const x = ev.blockPos.x;
+    const y = ev.blockPos.y;
+    const z = ev.blockPos.z;
     if (ev.player.getXuid() in inspect) {
         const data = sqlite.run(`SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?`, [x, y, z, dimension[ev.blockSource.getDimensionId()]])
         if (data.length == 0) {
@@ -128,12 +125,14 @@ event_1.events.blockDestroy.on(ev => {
     addData(ev.player.getNameTag(), ev.player.getXuid(), null, "Break", x, y, z, dimension[ev.blockSource.getDimensionId()])
 });
 event_1.events.chestOpen.on(ev => {
-    const x = String(ev.blockPos.x)
-    const y = String(ev.blockPos.y)
-    const z = String(ev.blockPos.z)
+    const x = ev.blockPos.x
+    const y = ev.blockPos.y
+    const z = ev.blockPos.z
     addData(ev.player.getNameTag(), ev.player.getXuid(), "Move:OpenChest", "Place", x, y, z, dimension[ev.player.getDimensionId()])
 });
-//コマンド
+
+
+//commands
 launcher_1.bedrockServer.afterOpen().then(() => {
     const bl = command_2.command.register("bl", "BDSX-Logging commands", command_1.CommandPermissionLevel.Operator)
 
@@ -208,6 +207,10 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const player = origin.getEntity();
         if (!(player.isPlayer())) return;
         sqlite.run("SELECT * FROM blocks WHERE name = ?", [param.nameTag], (data) => {
+            if (data.error) {
+                console.log("[BDSX-Logging]Select data error")
+                return;
+            }
             data.reverse();
             player.sendMessage(nameLookup(data, param.nameTag))
         });
@@ -224,10 +227,14 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const x = Math.floor(player.getPosition().x)
         const y = Math.floor(player.getPosition().y)
         const z = Math.floor(player.getPosition().z)
-        sqlite.run("SELECT * FROM blocks WHERE sqrt(pow(x-?,2)+pow(y-?,2)+pow(z-?,2)) <= ? AND d = ?", [x, y, z, param.radius, dimension[player.getDimensionId()]], (data) => {
+        sqlite.run("SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?))<=? AND d=?", [x, x, y, y, z, z, param.radius ** 2, dimension[player.getDimensionId()]], data => {
+            if (data.error) {
+                console.log("[BDSX-Logging]Select data error")
+                return
+            }
             data.reverse();
             player.sendMessage(rLookup(data, x, y, z, param.radius));
-        });
+        })
 
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
@@ -242,6 +249,10 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const sumTime = (param.days * 86400 + param.hours * 3600 + param.minutes * 60 + param.seconds);
         const min_time = Math.floor(date.getTime() / 1000) - sumTime;
         sqlite.run("SELECT * FROM blocks WHERE unix > ? AND d = ?", [min_time, dimension[player.getDimensionId()]], (data) => {
+            if (data.error) {
+                console.log("[BDSX-Logging]Select data error")
+                return
+            }
             player.sendMessage(timeLookup(data, sumTime));
         })
     }, {
@@ -254,6 +265,8 @@ launcher_1.bedrockServer.afterOpen().then(() => {
     });
 });
 
+//stop処理
 event_1.events.serverClose.on(ev => {
     console.log("[BDSX-Logging] Stop...")
+    sqlite.close();
 })
