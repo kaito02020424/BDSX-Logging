@@ -1,6 +1,6 @@
 {
   "name": "bdsx-logging",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "BDSX logging plugin",
   "main": "index.js",
   "bdsxPlugin": true,
@@ -10,6 +10,7 @@
   "author": "kaito02020424 <kaito02020424@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "bdsx": "file:../bdsx"
+    "bdsx": "file:../bdsx",
+    "sqlite-sync": "^0.3.9"
   }
 }
