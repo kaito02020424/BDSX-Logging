@@ -14,8 +14,16 @@ sqlite.run("CREATE TABLE IF NOT EXISTS blocks(name,xuid,mode,block,x,y,z,d,time,
         return;
     }
 })
+sqlite.create_function(pow);
+sqlite.create_function(sqrt)
 let inspect = {};
 const dimension = ["OverWorld", "Nether", "The End"];
+function pow(x, y) {
+    return Math.pow(x, y)
+}
+function sqrt(x) {
+    return Math.sqrt(x);
+}
 function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
     sqlite.insert("blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }, (res) => {
@@ -96,7 +104,6 @@ event_1.events.blockPlace.on(ev => {
             ev.player.sendMessage("No data.")
             return common_1.CANCEL
         }
-        console.log(data);
         let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
         ev.player.sendMessage(m);
         return common_1.CANCEL
@@ -217,7 +224,7 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const x = Math.floor(player.getPosition().x)
         const y = Math.floor(player.getPosition().y)
         const z = Math.floor(player.getPosition().z)
-        sqlite.run("SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?)) <= ? AND d = ?", [x, x, y, y, z, z, Math.pow(param.radius, 2), dimension[player.getDimensionId()]], (data) => {
+        sqlite.run("SELECT * FROM blocks WHERE sqrt(pow(x-?,2)+pow(y-?,2)+pow(z-?,2)) <= ? AND d = ?", [x, y, z, param.radius, dimension[player.getDimensionId()]], (data) => {
             data.reverse();
             player.sendMessage(rLookup(data, x, y, z, param.radius));
         });
