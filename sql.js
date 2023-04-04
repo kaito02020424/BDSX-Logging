@@ -12,7 +12,6 @@ process.on("message", (message) => {
             })
             break;
         case "insert":
-            console.log("SQL.js")
             sqlite.insert(message[1], message[2], () => { })
 
     }
