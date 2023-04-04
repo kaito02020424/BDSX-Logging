@@ -1,4 +1,4 @@
-const sqlite = require("sqlite-sync");
+const child_process = require("child_process");
 const event_1 = require("bdsx/event");
 const common_1 = require("bdsx/common");
 const nativetype_1 = require("bdsx/nativetype");
@@ -7,12 +7,18 @@ const command_1 = require("bdsx/bds/command");
 const command_2 = require("bdsx/command");
 const path = require("path");
 const cd = path.resolve(__dirname, "./");
-sqlite.connect(`${cd}/DB/logging.db`);
-sqlite.run("CREATE TABLE IF NOT EXISTS blocks(name,xuid,mode,block,x,y,z,d,time,unix);", (res) => {
-    if (res.error) {
-        console.log("[BDSX-Logging]Create table error");
+const sqlite = child_process.fork(`${cd}/sql.js`);
+sqlite.send(["connect"], (err) => {
+    if (err) {
+        console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
         return;
     }
+    sqlite.send(["run", "CREATE TABLE IF NOT EXISTS blocks(name,xuid,mode,block,x,y,z,d,time,unix);", [], "Create", null], (err) => {
+        if (err) {
+            console.log("[BDSX-Logging]Create table error");
+            return;
+        }
+    })
 })
 
 let inspect = {};
@@ -21,11 +27,9 @@ const dimension = ["OverWorld", "Nether", "The End"];
 //functions
 function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
-    sqlite.insert("blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }, (res) => {
-        if (res.error) {
-            console.log("[BDSX-Logging]Insert data error");
-        }
-    })
+    console.log("before")
+    sqlite.send(["insert", "blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }])
+    console.log("after")
 }
 function createMessage(data, x, y, z, max) {
     let m = `----§bBDSX-Logging§r----\n(§b${x}§r,§b${y}§r,§b${z}§r):`;
@@ -89,6 +93,14 @@ function timeLookup(data, time, di) {
     return m;
 }
 
+function getPlayer(nameTag) {
+    for (let player of launcher_1.bedrockServer.serverInstance.getPlayers()) {
+        if (player.getNameTag() == nameTag) {
+            return player;
+        }
+    }
+    return undefined;
+}
 //events
 event_1.events.blockPlace.on(ev => {
     const x = ev.blockPos.x;
@@ -96,14 +108,12 @@ event_1.events.blockPlace.on(ev => {
     const z = ev.blockPos.z;
     const xuid = ev.player.getXuid();
     if (ev.player.getXuid() in inspect) {
-        const data = sqlite.run(`SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?`, [x, y, z, dimension[ev.blockSource.getDimensionId()]])
-        if (data.length == 0) {
-            ev.player.sendMessage("No data.")
-            return common_1.CANCEL
-        }
-        let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
-        ev.player.sendMessage(m);
-        return common_1.CANCEL
+        sqlite.send(["run", "SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?", [x, y, z, dimension[ev.blockSource.getDimensionId()]], "inspect", [ev.player.getNameTag(), x, y, z, ev.player.getXuid()]], (err) => {
+            if (err) {
+                console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
+            }
+        })
+        return common_1.CANCEL;
     }
     addData(ev.player.getNameTag(), ev.player.getXuid(), ev.block.getName(), "Place", x, y, z, dimension[ev.blockSource.getDimensionId()])
 });
@@ -113,14 +123,12 @@ event_1.events.blockDestroy.on(ev => {
     const y = ev.blockPos.y;
     const z = ev.blockPos.z;
     if (ev.player.getXuid() in inspect) {
-        const data = sqlite.run(`SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?`, [x, y, z, dimension[ev.blockSource.getDimensionId()]])
-        if (data.length == 0) {
-            ev.player.sendMessage("No data.")
-            return common_1.CANCEL
-        }
-        let m = createMessage(data, x, y, z, inspect[ev.player.getXuid()]);
-        ev.player.sendMessage(m);
-        return common_1.CANCEL
+        sqlite.send(["run", "SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?", [x, y, z, dimension[ev.blockSource.getDimensionId()]], "inspect", [ev.player.getNameTag(), x, y, z, ev.player.getXuid()]], (err) => {
+            if (err) {
+                console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
+            }
+        })
+        return common_1.CANCEL;
     }
     addData(ev.player.getNameTag(), ev.player.getXuid(), null, "Break", x, y, z, dimension[ev.blockSource.getDimensionId()])
 });
@@ -206,15 +214,9 @@ launcher_1.bedrockServer.afterOpen().then(() => {
     bl.overload((param, origin, output) => {
         const player = origin.getEntity();
         if (!(player.isPlayer())) return;
-        sqlite.run("SELECT * FROM blocks WHERE name = ?", [param.nameTag], (data) => {
-            if (data.error) {
-                console.log("[BDSX-Logging]Select data error")
-                return;
-            }
-            data.reverse();
-            player.sendMessage(nameLookup(data, param.nameTag))
-        });
-
+        sqlite.send(["run", "SELECT * FROM blocks WHERE name = ?", [param.nameTag], "nameLookup", [player.getNameTag(), param.nameTag]], (err) => {
+            console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
+        })
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("name", { name: 0 }),
@@ -227,15 +229,7 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const x = Math.floor(player.getPosition().x)
         const y = Math.floor(player.getPosition().y)
         const z = Math.floor(player.getPosition().z)
-        sqlite.run("SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?))<=? AND d=?", [x, x, y, y, z, z, param.radius ** 2, dimension[player.getDimensionId()]], data => {
-            if (data.error) {
-                console.log("[BDSX-Logging]Select data error")
-                return
-            }
-            data.reverse();
-            player.sendMessage(rLookup(data, x, y, z, param.radius));
-        })
-
+        sqlite.send(["run", "SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?))<=? AND d=?", [x, x, y, y, z, z, param.radius ** 2, dimension[player.getDimensionId()]], "rLookup", [player.getNameTag(), x, y, z, param.radius]])
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("r", { r: 0 }),
@@ -248,13 +242,7 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const date = new Date();
         const sumTime = (param.days * 86400 + param.hours * 3600 + param.minutes * 60 + param.seconds);
         const min_time = Math.floor(date.getTime() / 1000) - sumTime;
-        sqlite.run("SELECT * FROM blocks WHERE unix > ? AND d = ?", [min_time, dimension[player.getDimensionId()]], (data) => {
-            if (data.error) {
-                console.log("[BDSX-Logging]Select data error")
-                return
-            }
-            player.sendMessage(timeLookup(data, sumTime));
-        })
+        sqlite.send(["run", "SELECT * FROM blocks WHERE unix > ? AND d = ?", [min_time, dimension[player.getDimensionId()]], "timeLookup", [player.getNameTag(), sumTime]])
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("time", { time: 0 }),
@@ -268,5 +256,68 @@ launcher_1.bedrockServer.afterOpen().then(() => {
 //stop処理
 event_1.events.serverClose.on(ev => {
     console.log("[BDSX-Logging] Stop...")
-    sqlite.close();
+    sqlite.kill()
+})
+
+//SQL結果受け取り
+sqlite.on("message", (res) => {
+    switch (res[2]) {
+        case "Create": {
+            break;
+        }
+        case "inspect": {
+            const data = res[1];
+            const player = getPlayer(res[3][0]);
+            const x = res[3][1]
+            const y = res[3][2]
+            const z = res[3][3]
+            const xuid = res[3][4]
+            if (data.length == 0) {
+                player.sendMessage("No data.")
+                break;
+            }
+            let m = createMessage(data, x, y, z, inspect[xuid]);
+            player.sendMessage(m);
+            break;
+        }
+        case "nameLookup": {
+            const data = res[1];
+            const player = getPlayer(res[3][0])
+            if (data.error) {
+                console.log("[BDSX-Logging]Select data error")
+                break;
+            }
+            data.reverse();
+            player.sendMessage(nameLookup(data, res[3][1]))
+            break;
+        }
+        case "rLookup": {
+            const data = res[1];
+            const player = getPlayer(res[3][0])
+            const x = res[3][1]
+            const y = res[3][2]
+            const z = res[3][3]
+            const radius = res[3][4]
+            if (data.error) {
+                console.log("[BDSX-Logging]Select data error")
+                break;
+            }
+            data.reverse();
+            player.sendMessage(rLookup(data, x, y, z, radius));
+            break;
+        }
+        case "timeLookup": {
+            const data = res[1];
+            const player = getPlayer(res[3][0]);
+            const sumTime = res[3][1]
+            if (data.error) {
+                console.log("[BDSX-Logging]Select data error")
+                break;
+            }
+            player.sendMessage(timeLookup(data, sumTime));
+            break;
+        }
+
+
+    }
 })
