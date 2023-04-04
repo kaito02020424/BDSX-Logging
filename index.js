@@ -27,9 +27,7 @@ const dimension = ["OverWorld", "Nether", "The End"];
 //functions
 function addData(name, xuid, block, mode, x, y, z, dimension) {
     const date = new Date()
-    console.log("before")
     sqlite.send(["insert", "blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }])
-    console.log("after")
 }
 function createMessage(data, x, y, z, max) {
     let m = `----§bBDSX-Logging§r----\n(§b${x}§r,§b${y}§r,§b${z}§r):`;
