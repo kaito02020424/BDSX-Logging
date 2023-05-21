@@ -30,19 +30,17 @@ function addData(name, xuid, block, mode, x, y, z, dimension) {
     sqlite.send(["insert", "blocks", { name: name, xuid: xuid, block: block, mode: mode, x: x, y: y, z: z, d: dimension, time: `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`, unix: Math.floor(date.getTime() / 1000) }])
 }
 function createMessage(data, x, y, z, max) {
+    if (data.length > max && max !== -1) {
+        return createMessage(data.slice(data.length-max),x,y,z,max)
+    }
     let m = `----§bBDSX-Logging§r----\n(§b${x}§r,§b${y}§r,§b${z}§r):`;
     let h = "";
-    let c = 0;
     for (const d of data) {
         if (h !== `§8${d.time}§r`) {
             m += `\n§8${d.time}§r`
             h = `§8${d.time}§r`
         }
         m += `\n[${d.mode == "Place" ? "§a+§r" : "§c-§r"}][§b${d.name}§r] ${d.mode == "Place" ? `${d.block} ` : ""}`
-        c += 1;
-        if (max <= c && max !== -1) {
-            break;
-        }
     }
     return m;
 }
@@ -106,7 +104,7 @@ event_1.events.blockPlace.on(ev => {
     const z = ev.blockPos.z;
     const xuid = ev.player.getXuid();
     if (ev.player.getXuid() in inspect) {
-        sqlite.send(["run", "SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?", [x, y, z, dimension[ev.blockSource.getDimensionId()]], "inspect", [ev.player.getNameTag(), x, y, z, ev.player.getXuid()]], (err) => {
+        sqlite.send(["run", "SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ? ORDER BY unix ASC", [x, y, z, dimension[ev.blockSource.getDimensionId()]], "inspect", [ev.player.getNameTag(), x, y, z, ev.player.getXuid()]], (err) => {
             if (err) {
                 console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
             }
@@ -121,7 +119,7 @@ event_1.events.blockDestroy.on(ev => {
     const y = ev.blockPos.y;
     const z = ev.blockPos.z;
     if (ev.player.getXuid() in inspect) {
-        sqlite.send(["run", "SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ?", [x, y, z, dimension[ev.blockSource.getDimensionId()]], "inspect", [ev.player.getNameTag(), x, y, z, ev.player.getXuid()]], (err) => {
+        sqlite.send(["run", "SELECT * FROM blocks WHERE x = ? AND y = ? AND z = ? AND d = ? ORDER BY unix ASC", [x, y, z, dimension[ev.blockSource.getDimensionId()]], "inspect", [ev.player.getNameTag(), x, y, z, ev.player.getXuid()]], (err) => {
             if (err) {
                 console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
             }
@@ -212,7 +210,7 @@ launcher_1.bedrockServer.afterOpen().then(() => {
     bl.overload((param, origin, output) => {
         const player = origin.getEntity();
         if (!(player.isPlayer())) return;
-        sqlite.send(["run", "SELECT * FROM blocks WHERE name = ?", [param.nameTag], "nameLookup", [player.getNameTag(), param.nameTag]], (err) => {
+        sqlite.send(["run", "SELECT * FROM blocks WHERE name = ? ORDER BY unix ASC", [param.nameTag], "nameLookup", [player.getNameTag(), param.nameTag]], (err) => {
             console.log(`[BDSX-Logging]Error! Error Log:\n${err}`)
         })
     }, {
@@ -227,7 +225,7 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const x = Math.floor(player.getPosition().x)
         const y = Math.floor(player.getPosition().y)
         const z = Math.floor(player.getPosition().z)
-        sqlite.send(["run", "SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?))<=? AND d=?", [x, x, y, y, z, z, param.radius ** 2, dimension[player.getDimensionId()]], "rLookup", [player.getNameTag(), x, y, z, param.radius]])
+        sqlite.send(["run", "SELECT * FROM blocks WHERE ((x-?)*(x-?)+(y-?)*(y-?)+(z-?)*(z-?))<=? AND d=? ORDER BY unix ASC", [x, x, y, y, z, z, param.radius ** 2, dimension[player.getDimensionId()]], "rLookup", [player.getNameTag(), x, y, z, param.radius]])
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("r", { r: 0 }),
@@ -240,7 +238,7 @@ launcher_1.bedrockServer.afterOpen().then(() => {
         const date = new Date();
         const sumTime = (param.days * 86400 + param.hours * 3600 + param.minutes * 60 + param.seconds);
         const min_time = Math.floor(date.getTime() / 1000) - sumTime;
-        sqlite.send(["run", "SELECT * FROM blocks WHERE unix > ? AND d = ?", [min_time, dimension[player.getDimensionId()]], "timeLookup", [player.getNameTag(), sumTime]])
+        sqlite.send(["run", "SELECT * FROM blocks WHERE unix > ? AND d = ? ORDER BY unix ASC", [min_time, dimension[player.getDimensionId()]], "timeLookup", [player.getNameTag(), sumTime]])
     }, {
         mode: command_2.command.enum("lookup", { lookup: 0 }),
         lookupmode: command_2.command.enum("time", { time: 0 }),
@@ -285,7 +283,6 @@ sqlite.on("message", (res) => {
                 console.log("[BDSX-Logging]Select data error")
                 break;
             }
-            data.reverse();
             player.sendMessage(nameLookup(data, res[3][1]))
             break;
         }
@@ -300,7 +297,6 @@ sqlite.on("message", (res) => {
                 console.log("[BDSX-Logging]Select data error")
                 break;
             }
-            data.reverse();
             player.sendMessage(rLookup(data, x, y, z, radius));
             break;
         }
